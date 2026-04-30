@@ -413,7 +413,8 @@ export default function AdminDashboard({ user }: { user: User }) {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {!showCreate && !showCreateEval && !showManageEval && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {exams.map((exam) => (
           <div key={exam.id} className="bg-white border border-zinc-200 p-6 flex flex-col justify-between">
             <div>
@@ -460,6 +461,7 @@ export default function AdminDashboard({ user }: { user: User }) {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
