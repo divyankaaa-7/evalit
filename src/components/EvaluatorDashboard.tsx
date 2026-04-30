@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, Paper, SegmentedAnswer, AnswerKeySection } from '../types';
 import { api } from '../services/api';
 import { aiService } from '../services/ai';
-import { FileStack, ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, AlertCircle, Save, ArrowLeft, X } from 'lucide-react';
+import { FileStack, ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, AlertCircle, Save, ArrowLeft, X, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
@@ -12,6 +12,26 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const Timer = ({ seconds, minSeconds }: { seconds: number, minSeconds: number }) => {
+  const remaining = Math.max(0, minSeconds - seconds);
+  const isComplete = seconds >= minSeconds;
+
+  const formatTime = (totalSeconds: number) => {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className={cn("flex items-center gap-2 px-4 py-1.5 border rounded-full font-mono text-sm shadow-sm transition-colors", isComplete ? "bg-green-50 border-green-200 text-green-700" : "bg-orange-50 border-orange-200 text-orange-700")}>
+      <Clock className="w-4 h-4" />
+      {isComplete ? "Time Requirement Met" : `Mandatory Review Time: ${formatTime(remaining)}`}
+    </div>
+  );
+};
+
+const MIN_EVAL_TIME = 60; // 60 seconds
+
 export default function EvaluatorDashboard({ user }: { user: User }) {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
@@ -20,6 +40,18 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
   const [marks, setMarks] = useState<Record<string, number>>({});
   const [processing, setProcessing] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showOriginalPdf, setShowOriginalPdf] = useState(false);
+  const [timeSpent, setTimeSpent] = useState(0);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (selectedPaper && !processing) {
+      interval = setInterval(() => {
+        setTimeSpent(s => s + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [selectedPaper, processing]);
 
   useEffect(() => {
     loadPapers();
@@ -33,6 +65,7 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
   const startEvaluation = async (paper: Paper) => {
     setSelectedPaper(paper);
     setCurrentQuestionIdx(0);
+    setTimeSpent(0);
     
     if (paper.digitized_text_json) {
       setDigitizedAnswers(JSON.parse(paper.digitized_text_json));
@@ -112,14 +145,6 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
     return { breakdown, totalScore: finalScore, examMaxMarks: examMaxMarks !== Infinity ? examMaxMarks : accumulatedMax };
   };
 
-  const openOriginal = () => {
-    if (!selectedPaper) return;
-    const win = window.open();
-    if (win) {
-      win.document.write(`<iframe src="${selectedPaper.pdf_base64}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
-    }
-  };
-
   if (selectedPaper) {
     const currentAnswer = digitizedAnswers[currentQuestionIdx];
     const answerKey = JSON.parse(selectedPaper.answer_key_json || '[]') as AnswerKeySection[];
@@ -127,7 +152,7 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+        <div className="flex items-center justify-between border-b border-zinc-200 pb-4 relative">
           <div className="flex items-center gap-4">
             <button onClick={() => setSelectedPaper(null)} className="p-2 hover:bg-zinc-100 transition-colors">
               <ArrowLeft className="w-5 h-5" />
@@ -137,19 +162,42 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
               <p className="text-xs text-zinc-400 font-mono uppercase">{selectedPaper.exam_title}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
+            <Timer seconds={timeSpent} minSeconds={MIN_EVAL_TIME} />
+          </div>
+
+          <div className="flex items-center gap-3 relative">
             <button 
-              onClick={openOriginal}
+              onClick={() => setShowOriginalPdf(!showOriginalPdf)}
               className="flex items-center gap-2 px-4 py-2 border border-zinc-200 text-sm hover:bg-zinc-50 transition-colors"
             >
-              <ExternalLink className="w-4 h-4" /> Open Original Copy
+              <ExternalLink className="w-4 h-4" /> {showOriginalPdf ? 'Close Original Copy' : 'Open Original Copy'}
             </button>
             <button 
-              onClick={() => setShowConfirmation(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white text-sm hover:bg-zinc-800 transition-colors"
+              onClick={() => timeSpent >= MIN_EVAL_TIME && setShowConfirmation(true)}
+              disabled={timeSpent < MIN_EVAL_TIME}
+              className={cn("flex items-center gap-2 px-4 py-2 text-sm transition-colors", timeSpent >= MIN_EVAL_TIME ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-zinc-200 text-zinc-400 cursor-not-allowed")}
             >
-              <Save className="w-4 h-4" /> Mark as Completed
+              <Save className="w-4 h-4" /> {timeSpent >= MIN_EVAL_TIME ? "Mark as Completed" : `Reviewing (${Math.max(0, MIN_EVAL_TIME - timeSpent)}s)`}
             </button>
+
+            <AnimatePresence>
+              {showOriginalPdf && selectedPaper && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  className="absolute top-full right-0 mt-2 z-50 bg-white w-[500px] h-[600px] shadow-2xl flex flex-col border border-zinc-300 rounded-md overflow-hidden origin-top-right"
+                >
+                  <div className="bg-zinc-100 flex justify-between items-center p-3 border-b border-zinc-300">
+                    <h3 className="font-medium text-sm text-zinc-700 font-mono">Original Copy Preview</h3>
+                    <button onClick={() => setShowOriginalPdf(false)} className="p-1 hover:bg-zinc-200 rounded"><X className="w-4 h-4"/></button>
+                  </div>
+                  <iframe src={selectedPaper.pdf_base64} className="flex-1 w-full border-none" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -159,9 +207,30 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
             <p className="font-mono text-sm animate-pulse">AI is digitizing and segmenting answer sheet...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Digitized Output Area */}
-            <div className="lg:col-span-8 flex flex-col h-[70vh]">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left: Key Points */}
+            <div className="lg:col-span-3 h-[70vh]">
+              <div className="bg-white border border-zinc-200 p-6 shadow-sm h-full flex flex-col">
+                <h4 className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 mb-4">Required Key Points</h4>
+                <div className="space-y-3 flex-1 overflow-y-auto pr-2">
+                  {currentAnswer?.matches.map((m, idx) => (
+                    <div key={idx} className={cn(
+                      "p-3 text-xs flex items-start gap-2 border transition-colors",
+                      m.found ? "bg-green-50 border-green-100 text-green-700" : "bg-red-50 border-red-100 text-red-700"
+                    )}>
+                      {m.found ? <CheckCircle2 className="w-3 h-3 mt-0.5 flex-shrink-0" /> : <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
+                      <span>{m.point}</span>
+                    </div>
+                  ))}
+                  {(!currentAnswer?.matches || currentAnswer.matches.length === 0) && (
+                    <p className="text-xs text-zinc-400 italic">No specific points defined in key.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Middle: Digitized Output Area */}
+            <div className="lg:col-span-6 flex flex-col h-[70vh]">
               <div className="flex-1 overflow-y-auto bg-white border border-zinc-200 p-8 shadow-sm">
                 <div className="flex justify-between items-start mb-8">
                   <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-zinc-400">Digitized Transcript</div>
@@ -198,48 +267,54 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
               </div>
             </div>
 
-            {/* Evaluation Insight Panel */}
-            <div className="lg:col-span-4 space-y-6">
-              <div className="bg-white border border-zinc-200 p-6 shadow-sm">
-                <h4 className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 mb-4">Required Key Points</h4>
-                <div className="space-y-3">
-                  {currentAnswer?.matches.map((m, idx) => (
-                    <div key={idx} className={cn(
-                      "p-3 text-xs flex items-start gap-2 border transition-colors",
-                      m.found ? "bg-green-50 border-green-100 text-green-700" : "bg-red-50 border-red-100 text-red-700"
-                    )}>
-                      {m.found ? <CheckCircle2 className="w-3 h-3 mt-0.5" /> : <AlertCircle className="w-3 h-3 mt-0.5" />}
-                      <span>{m.point}</span>
-                    </div>
-                  ))}
-                  {(!currentAnswer?.matches || currentAnswer.matches.length === 0) && (
-                    <p className="text-xs text-zinc-400 italic">No specific points defined in key.</p>
-                  )}
+            {/* Right: Navigation & Marking Panel */}
+            <div className="lg:col-span-3 h-[70vh]">
+              <div className="bg-white border border-zinc-200 shadow-sm h-full flex flex-col">
+                <div className="p-4 border-b border-zinc-200 bg-zinc-50">
+                  <h4 className="text-[10px] uppercase tracking-widest font-bold text-zinc-900">Question Navigator</h4>
                 </div>
-              </div>
-
-              <div className="bg-white border border-zinc-200 p-6 shadow-sm">
-                <h4 className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 mb-4">Final Verdict</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] text-zinc-400 mb-1">Assigned Marks (Max {currentKeySection?.maxMarks || 0})</label>
-                    <input 
-                      type="number"
-                      max={currentKeySection?.maxMarks || 0}
-                      value={marks[currentAnswer?.questionNumber] || 0}
-                      onChange={(e) => {
-                        const val = Math.min(parseInt(e.target.value) || 0, currentKeySection?.maxMarks || 0);
-                        setMarks({ ...marks, [currentAnswer?.questionNumber]: val });
-                      }}
-                      className="w-full p-4 border border-zinc-200 focus:border-zinc-900 outline-none text-2xl font-serif text-center"
-                    />
-                  </div>
-                  <div className="p-3 bg-zinc-50 border border-zinc-100 flex items-center justify-between">
-                    <span className="text-[10px] uppercase text-zinc-400">Total Progress</span>
-                    <span className="text-xs font-mono font-bold">
-                      {Object.keys(marks).length} / {digitizedAnswers.length}
-                    </span>
-                  </div>
+                <div className="flex-1 overflow-y-auto">
+                  {digitizedAnswers.map((ans, idx) => {
+                    const keySec = answerKey.find(k => k.questionNumber === ans.questionNumber);
+                    const max = keySec?.maxMarks || 0;
+                    const isCurrent = idx === currentQuestionIdx;
+                    return (
+                      <div key={idx} 
+                           onClick={() => setCurrentQuestionIdx(idx)}
+                           className={cn(
+                             "p-4 border-b border-zinc-100 cursor-pointer flex items-center justify-between hover:bg-zinc-50 transition-colors", 
+                             isCurrent ? "bg-zinc-100 border-l-4 border-l-zinc-900" : "border-l-4 border-l-transparent"
+                           )}>
+                        <span className="font-mono font-bold">
+                          {ans.questionNumber.toLowerCase().startsWith('q') ? ans.questionNumber : `Q${ans.questionNumber}`}
+                        </span>
+                        <input 
+                          type="number"
+                          min="0"
+                          onClick={(e) => e.stopPropagation()}
+                          max={max}
+                          value={marks[ans.questionNumber] ?? ''}
+                          placeholder={`/${max}`}
+                          onChange={(e) => {
+                            let valStr = e.target.value;
+                            if (valStr === '') {
+                              const newMarks = { ...marks };
+                              delete newMarks[ans.questionNumber];
+                              setMarks(newMarks);
+                            } else {
+                              const val = Math.max(0, Math.min(parseInt(valStr) || 0, max));
+                              setMarks({ ...marks, [ans.questionNumber]: val });
+                            }
+                          }}
+                          className="w-16 p-2 border border-zinc-200 text-center font-mono text-sm focus:border-zinc-900 outline-none"
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="p-4 bg-zinc-900 text-white flex justify-between items-center">
+                  <span className="text-[10px] uppercase tracking-widest">Progress</span>
+                  <span className="font-mono text-sm">{Object.keys(marks).length} / {digitizedAnswers.length}</span>
                 </div>
               </div>
             </div>
@@ -278,7 +353,9 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
                     <tbody className="divide-y divide-zinc-100">
                       {calculateScoreBreakdown().breakdown.map((group: any, idx: number) => (
                         <tr key={idx} className={group.counted ? 'bg-white' : 'bg-red-50 text-red-800 opacity-60'}>
-                          <td className="px-4 py-3 font-bold font-mono">Q{group.mainQuestionNumber}</td>
+                          <td className="px-4 py-3 font-bold font-mono">
+                            {group.mainQuestionNumber.toLowerCase().startsWith('q') ? group.mainQuestionNumber : `Q${group.mainQuestionNumber}`}
+                          </td>
                           <td className="px-4 py-3 text-xs text-zinc-500">{group.subQuestions.join(', ')}</td>
                           <td className="px-4 py-3 text-right font-mono">
                             {group.totalScore} / {group.maxScore}
@@ -301,7 +378,7 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
                 </div>
 
                 <div className="flex items-center justify-between p-6 bg-zinc-900 text-white mb-8">
-                  <div className="text-sm uppercase tracking-widest opacity-60">Final Best-of-N Score</div>
+                  <div className="text-sm uppercase tracking-widest opacity-60">Final Best Score</div>
                   <div className="text-4xl font-serif italic">
                     {calculateScoreBreakdown().totalScore} <span className="text-xl opacity-50">/ {calculateScoreBreakdown().examMaxMarks}</span>
                   </div>
