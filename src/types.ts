@@ -15,6 +15,7 @@ export interface AnswerKeySection {
   questionNumber: string;
   points: string[];
   maxMarks: number;
+  mainQuestionNumber?: string;
 }
 
 export interface Exam {
@@ -22,6 +23,7 @@ export interface Exam {
   title: string;
   question_paper_text?: string;
   answer_key_json: string; // Serialized AnswerKeySection[]
+  max_marks?: number;
   created_at: string;
 }
 
@@ -36,6 +38,7 @@ export interface Paper {
   digitized_text_json: string | null; // Serialized SegmentedAnswer[]
   exam_title?: string;
   answer_key_json?: string;
+  max_marks?: number;
 }
 
 export interface SegmentedAnswer {

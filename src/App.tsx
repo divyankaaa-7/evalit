@@ -38,7 +38,7 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full"
+          className="max-w-md w-full bg-white border-2 border-black p-10 shadow-md rounded-md"
         >
           <div className="text-center mb-8">
             <GraduationCap className="w-12 h-12 mx-auto mb-4 text-zinc-900" />
@@ -46,8 +46,10 @@ export default function App() {
             <p className="text-zinc-500 font-sans text-sm uppercase tracking-widest font-medium">Digital Evaluation Platform</p>
           </div>
 
-          <form onSubmit={handleLogin} className="bg-white border border-zinc-200 p-8 shadow-sm">
-            <h2 className="text-lg font-medium mb-6 text-zinc-800">Secure Sign In</h2>
+          <form onSubmit={handleLogin}>
+            <div className="border-t border-zinc-100 pt-8 mb-6">
+              <h2 className="text-lg font-medium text-zinc-800">Secure Sign In</h2>
+            </div>
             {error && <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 border border-red-100">{error}</div>}
             
             <div className="space-y-4">
