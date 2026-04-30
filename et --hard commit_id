@@ -1,0 +1,17 @@
+[33mcommit 8ad6d12d48d276ce862a2d2aed155771958b8303[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Divyanka Sinha <divyanka20sinha@gmail.com>
+Date:   Thu Apr 30 01:18:36 2026 +0530
+
+    Fix title text in index.html
+
+[33mcommit ebea94616e8388e319481e6af6c1657f430f7ad8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: Divyanka Sinha <divyanka20sinha@gmail.com>
+Date:   Thu Apr 30 01:02:53 2026 +0530
+
+    paper is showing under Jane Smith
+
+[33mcommit 117ad740b04e6bf0f248b84e7186f145f52bfae3[m
+Author: Ridhi Shenoy <ridhishenoy1010@gmail.com>
+Date:   Wed Apr 29 22:51:36 2026 +0530
+
+    first commit

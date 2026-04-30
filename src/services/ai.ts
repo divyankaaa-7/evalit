@@ -13,23 +13,24 @@ export const aiService = {
     // Clean base64 (remove data:application/pdf;base64,)
     const base64Data = pdfBase64.split(',')[1] || pdfBase64;
 
-    const prompt = `
-      You are an expert academic evaluator. You are given a handwritten student answer sheet as a PDF and a detailed answer key.
+      const prompt = `
+      You are an expert academic evaluator. You are given a handwritten student answer sheet as a PDF.
       
       TASK:
       1. Digitize the handwritten text from the PDF precisely.
       2. Identify diagrams and describe them briefly in brackets like [Diagram: Description].
-      3. Segment the digitized text strictly into question numbers defined in the Answer Key.
+      3. Segment the digitized text strictly into question numbers. 
+         - If an ANSWER KEY is provided below, use its question numbers.
+         - If the ANSWER KEY is empty ([]), automatically detect the question numbers written by the student (e.g., Q1, Ans 2, 3(a)) and segment the text accordingly.
       4. For each question:
          - Provide the digitized text for that specific answer.
-         - Compare the student's answer against the "points" provided in the Answer Key.
-         - For each point in the Answer Key, determine if the student mentioned it (found: true/false).
+         - If an ANSWER KEY is provided, compare the student's answer against it and determine if the points were mentioned.
       
       ANSWER KEY:
       ${JSON.stringify(answerKey, null, 2)}
       
       OUTPUT FORMAT:
-      Return a JSON array of SegmentedAnswer objects:
+      Return a JSON array of SegmentedAnswer objects. Use regex-like precision to ensure that text belonging to one question does not bleed into another.
       interface SegmentedAnswer {
         questionId: string;
         questionNumber: string;
@@ -64,8 +65,16 @@ export const aiService = {
         }
       });
 
-      const result = JSON.parse(response.text || "[]");
-      return result;
+      let responseText = response.text || "[]";
+      // Strip markdown code blocks if the AI added them
+      if (responseText.startsWith('```json')) {
+        responseText = responseText.replace(/```json\n?/, '').replace(/\n?```$/, '');
+      } else if (responseText.startsWith('```')) {
+        responseText = responseText.replace(/```\n?/, '').replace(/\n?```$/, '');
+      }
+      
+      const result = JSON.parse(responseText.trim() || "[]");
+      return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error("AI Error:", error);
       throw error;
