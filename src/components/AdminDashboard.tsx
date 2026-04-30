@@ -10,6 +10,7 @@ export default function AdminDashboard({ user }: { user: User }) {
   const [allEvaluators, setAllEvaluators] = useState<User[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [newExamTitle, setNewExamTitle] = useState('');
+  const [newExamMaxMarks, setNewExamMaxMarks] = useState(100);
   const [answerKey, setAnswerKey] = useState<AnswerKeySection[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
@@ -38,8 +39,9 @@ export default function AdminDashboard({ user }: { user: User }) {
         reader.onload = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-      const extractedKey = await aiService.extractAnswerKey(base64);
-      setAnswerKey(extractedKey);
+      const extracted = await aiService.extractAnswerKey(base64);
+      setAnswerKey(extracted.sections);
+      setNewExamMaxMarks(extracted.totalMaxMarks);
       alert('Answer key extracted successfully!');
     } catch (err) {
       alert("Failed to extract answer key. Please check console for errors.");
@@ -55,7 +57,8 @@ export default function AdminDashboard({ user }: { user: User }) {
       await api.createExam({
         id: 'exam_' + Date.now(),
         title: newExamTitle,
-        answer_key_json: JSON.stringify(answerKey)
+        answer_key_json: JSON.stringify(answerKey),
+        max_marks: newExamMaxMarks
       });
       setNewExamTitle('');
       setAnswerKey([]);
@@ -380,8 +383,20 @@ export default function AdminDashboard({ user }: { user: User }) {
               </div>
 
               {answerKey.length > 0 && (
-                <div className="mt-4 p-4 bg-green-50 border border-green-100 text-sm text-green-800">
-                  <span className="font-bold">Success!</span> Extracted {answerKey.length} questions from the document.
+                <div className="space-y-4 mt-4">
+                  <div className="p-4 bg-green-50 border border-green-100 text-sm text-green-800">
+                    <span className="font-bold">Success!</span> Extracted {answerKey.length} questions from the document.
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-zinc-400 font-bold mb-2">Maximum Exam Marks</label>
+                    <input
+                      type="number"
+                      value={newExamMaxMarks}
+                      onChange={(e) => setNewExamMaxMarks(parseInt(e.target.value) || 0)}
+                      className="w-32 p-3 border border-zinc-200 focus:border-zinc-900 outline-none transition-colors"
+                    />
+                    <p className="text-xs text-zinc-500 mt-1">Automatically extracted. Edit if incorrect.</p>
+                  </div>
                 </div>
               )}
             </div>

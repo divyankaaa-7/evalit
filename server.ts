@@ -17,6 +17,7 @@ db.exec(`
     title TEXT NOT NULL,
     question_paper_text TEXT,
     answer_key_json TEXT,
+    max_marks INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -48,6 +49,14 @@ try {
 } catch (e: any) {
   if (!e.message.includes('duplicate column name')) {
     console.error("Migration error (email):", e.message);
+  }
+}
+
+try {
+  db.exec("ALTER TABLE exams ADD COLUMN max_marks INTEGER;");
+} catch (e: any) {
+  if (!e.message.includes('duplicate column name')) {
+    console.error("Migration error (max_marks):", e.message);
   }
 }
 
@@ -149,8 +158,8 @@ async function startServer() {
 
   // Create an exam
   app.post("/api/exams", (req, res) => {
-    const { id, title, question_paper_text, answer_key_json } = req.body;
-    db.prepare("INSERT INTO exams (id, title, question_paper_text, answer_key_json) VALUES (?, ?, ?, ?)").run(id, title, question_paper_text, answer_key_json);
+    const { id, title, question_paper_text, answer_key_json, max_marks } = req.body;
+    db.prepare("INSERT INTO exams (id, title, question_paper_text, answer_key_json, max_marks) VALUES (?, ?, ?, ?, ?)").run(id, title, question_paper_text, answer_key_json, max_marks);
     res.json({ success: true });
   });
 
@@ -238,7 +247,7 @@ async function startServer() {
   app.get("/api/evaluator/:userId/papers", (req, res) => {
     const { userId } = req.params;
     const papers = db.prepare(`
-      SELECT p.*, e.title as exam_title, e.answer_key_json 
+      SELECT p.*, e.title as exam_title, e.answer_key_json, e.max_marks 
       FROM papers p 
       JOIN exams e ON p.exam_id = e.id 
       WHERE p.assigned_to = ?

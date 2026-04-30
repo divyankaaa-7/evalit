@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { User, Paper, SegmentedAnswer, AnswerKeySection } from '../types';
 import { api } from '../services/api';
 import { aiService } from '../services/ai';
-import { FileStack, ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, AlertCircle, Save, ArrowLeft } from 'lucide-react';
+import { FileStack, ChevronLeft, ChevronRight, ExternalLink, CheckCircle2, AlertCircle, Save, ArrowLeft, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import ReactMarkdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -18,6 +19,7 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
   const [digitizedAnswers, setDigitizedAnswers] = useState<SegmentedAnswer[]>([]);
   const [marks, setMarks] = useState<Record<string, number>>({});
   const [processing, setProcessing] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   useEffect(() => {
     loadPapers();
@@ -56,7 +58,7 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
     }
   };
 
-  const saveEvaluation = async () => {
+  const confirmSaveEvaluation = async () => {
     if (!selectedPaper) return;
     try {
       await api.updatePaperEvaluation(selectedPaper.id, {
@@ -65,11 +67,49 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
         status: 'completed'
       });
       alert('Evaluation saved and stored successfully.');
+      setShowConfirmation(false);
       setSelectedPaper(null);
       loadPapers();
     } catch (e) {
       alert('Failed to save evaluation.');
     }
+  };
+
+  const calculateScoreBreakdown = () => {
+    if (!selectedPaper) return { breakdown: [], totalScore: 0, examMaxMarks: 0 };
+    const answerKey = JSON.parse(selectedPaper.answer_key_json || '[]') as AnswerKeySection[];
+    const examMaxMarks = selectedPaper.max_marks || Infinity;
+
+    const grouped = new Map<string, any>();
+    for (const q of answerKey) {
+      const mainNum = q.mainQuestionNumber || q.questionNumber;
+      if (!grouped.has(mainNum)) {
+        grouped.set(mainNum, { mainQuestionNumber: mainNum, subQuestions: [], totalScore: 0, maxScore: 0, counted: false });
+      }
+      const group = grouped.get(mainNum)!;
+      group.subQuestions.push(q.questionNumber);
+      group.maxScore += q.maxMarks;
+      group.totalScore += marks[q.questionNumber] || 0;
+    }
+
+    const breakdown = Array.from(grouped.values());
+    breakdown.sort((a, b) => b.totalScore - a.totalScore); // Sort by highest marks first
+
+    let accumulatedMax = 0;
+    let finalScore = 0;
+
+    for (const group of breakdown) {
+      if (examMaxMarks === Infinity || accumulatedMax + group.maxScore <= examMaxMarks) {
+        group.counted = true;
+        accumulatedMax += group.maxScore;
+        finalScore += group.totalScore;
+      } else {
+        group.counted = false;
+      }
+    }
+
+    breakdown.sort((a, b) => a.mainQuestionNumber.localeCompare(b.mainQuestionNumber));
+    return { breakdown, totalScore: finalScore, examMaxMarks: examMaxMarks !== Infinity ? examMaxMarks : accumulatedMax };
   };
 
   const openOriginal = () => {
@@ -105,7 +145,7 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
               <ExternalLink className="w-4 h-4" /> Open Original Copy
             </button>
             <button 
-              onClick={saveEvaluation}
+              onClick={() => setShowConfirmation(true)}
               className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white text-sm hover:bg-zinc-800 transition-colors"
             >
               <Save className="w-4 h-4" /> Mark as Completed
@@ -128,8 +168,12 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
                   <div className="text-xl font-serif italic text-zinc-900">{currentAnswer?.questionNumber || 'Question Not Found'}</div>
                 </div>
                 
-                <div className="prose prose-zinc max-w-none text-zinc-800 leading-relaxed whitespace-pre-wrap font-sans">
-                  {currentAnswer?.text || "No digitizable text found for this section."}
+                <div className="prose prose-zinc prose-sm max-w-none text-zinc-800 font-sans">
+                  {currentAnswer?.text ? (
+                    <ReactMarkdown>{currentAnswer.text}</ReactMarkdown>
+                  ) : (
+                    "No digitizable text found for this section."
+                  )}
                 </div>
               </div>
 
@@ -201,6 +245,86 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
             </div>
           </div>
         )}
+
+        <AnimatePresence>
+          {showConfirmation && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white max-w-2xl w-full p-8 shadow-xl max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h2 className="text-2xl font-serif italic mb-1">Marks Division Summary</h2>
+                    <p className="text-sm text-zinc-500">Review the score breakdown before finalizing.</p>
+                  </div>
+                  <button onClick={() => setShowConfirmation(false)} className="p-2 hover:bg-zinc-100 transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="border border-zinc-200 mb-6">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-zinc-50 border-b border-zinc-200">
+                      <tr>
+                        <th className="px-4 py-3 font-medium text-zinc-500">Main Question</th>
+                        <th className="px-4 py-3 font-medium text-zinc-500">Sub-questions</th>
+                        <th className="px-4 py-3 font-medium text-zinc-500 text-right">Score</th>
+                        <th className="px-4 py-3 font-medium text-zinc-500 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {calculateScoreBreakdown().breakdown.map((group: any, idx: number) => (
+                        <tr key={idx} className={group.counted ? 'bg-white' : 'bg-red-50 text-red-800 opacity-60'}>
+                          <td className="px-4 py-3 font-bold font-mono">Q{group.mainQuestionNumber}</td>
+                          <td className="px-4 py-3 text-xs text-zinc-500">{group.subQuestions.join(', ')}</td>
+                          <td className="px-4 py-3 text-right font-mono">
+                            {group.totalScore} / {group.maxScore}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {group.counted ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-green-600 bg-green-50 px-2 py-1 rounded">
+                                <CheckCircle2 className="w-3 h-3" /> Counted
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold text-red-600">
+                                Extra Question
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex items-center justify-between p-6 bg-zinc-900 text-white mb-8">
+                  <div className="text-sm uppercase tracking-widest opacity-60">Final Best-of-N Score</div>
+                  <div className="text-4xl font-serif italic">
+                    {calculateScoreBreakdown().totalScore} <span className="text-xl opacity-50">/ {calculateScoreBreakdown().examMaxMarks}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setShowConfirmation(false)}
+                    className="flex-1 px-4 py-3 border border-zinc-200 font-medium hover:bg-zinc-50 transition-colors"
+                  >
+                    Back to Evaluation
+                  </button>
+                  <button 
+                    onClick={confirmSaveEvaluation}
+                    className="flex-1 px-4 py-3 bg-zinc-900 text-white font-medium hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="w-5 h-5" /> Confirm and Submit Score
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
