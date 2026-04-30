@@ -30,8 +30,6 @@ const Timer = ({ seconds, minSeconds }: { seconds: number, minSeconds: number })
   );
 };
 
-const MIN_EVAL_TIME = 60; // 60 seconds
-
 export default function EvaluatorDashboard({ user }: { user: User }) {
   const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
@@ -164,7 +162,12 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
           </div>
 
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
-            <Timer seconds={timeSpent} minSeconds={MIN_EVAL_TIME} />
+            {selectedPaper && (
+              <Timer 
+                seconds={timeSpent} 
+                minSeconds={Math.max(30, Math.round((selectedPaper.max_marks || 100) / 50 * 30))} 
+              />
+            )}
           </div>
 
           <div className="flex items-center gap-3 relative">
@@ -175,11 +178,22 @@ export default function EvaluatorDashboard({ user }: { user: User }) {
               <ExternalLink className="w-4 h-4" /> {showOriginalPdf ? 'Close Original Copy' : 'Open Original Copy'}
             </button>
             <button 
-              onClick={() => timeSpent >= MIN_EVAL_TIME && setShowConfirmation(true)}
-              disabled={timeSpent < MIN_EVAL_TIME}
-              className={cn("flex items-center gap-2 px-4 py-2 text-sm transition-colors", timeSpent >= MIN_EVAL_TIME ? "bg-zinc-900 text-white hover:bg-zinc-800" : "bg-zinc-200 text-zinc-400 cursor-not-allowed")}
+              onClick={() => {
+                const minTime = Math.max(30, Math.round((selectedPaper?.max_marks || 100) / 50 * 30));
+                if (timeSpent >= minTime) setShowConfirmation(true);
+              }}
+              disabled={timeSpent < Math.max(30, Math.round((selectedPaper?.max_marks || 100) / 50 * 30))}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 text-sm transition-colors", 
+                timeSpent >= Math.max(30, Math.round((selectedPaper?.max_marks || 100) / 50 * 30)) 
+                  ? "bg-zinc-900 text-white hover:bg-zinc-800" 
+                  : "bg-zinc-200 text-zinc-400 cursor-not-allowed"
+              )}
             >
-              <Save className="w-4 h-4" /> {timeSpent >= MIN_EVAL_TIME ? "Mark as Completed" : `Reviewing (${Math.max(0, MIN_EVAL_TIME - timeSpent)}s)`}
+              <Save className="w-4 h-4" /> 
+              {timeSpent >= Math.max(30, Math.round((selectedPaper?.max_marks || 100) / 50 * 30)) 
+                ? "Mark as Completed" 
+                : `Reviewing (${Math.max(0, Math.max(30, Math.round((selectedPaper?.max_marks || 100) / 50 * 30)) - timeSpent)}s)`}
             </button>
 
             <AnimatePresence>
