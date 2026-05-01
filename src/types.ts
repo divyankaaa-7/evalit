@@ -4,10 +4,10 @@ export enum UserRole {
 }
 
 export interface User {
-  id: string; // Used as email
+  id: string;
   name: string;
+  email?: string;
   role: UserRole;
-  password?: string;
 }
 
 export interface AnswerKeySection {
@@ -15,6 +15,7 @@ export interface AnswerKeySection {
   questionNumber: string;
   points: string[];
   maxMarks: number;
+  mainQuestionNumber?: string;
 }
 
 export interface Exam {
@@ -22,8 +23,7 @@ export interface Exam {
   title: string;
   question_paper_text?: string;
   answer_key_json: string; // Serialized AnswerKeySection[]
-  question_paper_pdf?: string; // Base64 or Path
-  answer_key_pdf?: string; // Base64 or Path
+  max_marks?: number;
   created_at: string;
 }
 
@@ -34,12 +34,11 @@ export interface Paper {
   pdf_base64: string;
   assigned_to: string | null;
   status: 'pending' | 'evaluating' | 'completed';
-  marks_json: string | null; // Serialized Record<questionNumber, number>
+  marks_json: string | null; // Serialized Map<questionId, number>
   digitized_text_json: string | null; // Serialized SegmentedAnswer[]
-  remarks?: string;
   exam_title?: string;
   answer_key_json?: string;
-  answer_key_pdf?: string;
+  max_marks?: number;
 }
 
 export interface SegmentedAnswer {
